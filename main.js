@@ -150,33 +150,66 @@ document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaKey && !e.ctrlKey) toggleTheme(); });
 
 /* --------------------- canvas: Octocat turret ---------------------
-   The GitHub Octocat is the hub of the agent-spend graph. It aims at the
-   cursor (idles when the cursor leaves), auto-fires laser bolts at drifting
-   "balls" (agents/wallets); a hit pops the ball in a coloured splash, and new
-   balls keep spawning so the graph never empties. Click to fire on demand. */
+   The GitHub Octocat is the hub of the agent-spend graph. It wanders the
+   viewport on its own, auto-fires laser bolts at drifting "balls"
+   (agents/wallets); a hit pops the ball in a coloured splash, and new balls
+   keep spawning so the graph never empties. Click to fire on demand. */
 (function octoTurret() {
   const canvas = document.getElementById("bg");
   const ctx = canvas.getContext("2d");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let w, h, dpr, raf;
-  const mouse = { x: -9999, y: -9999, active: false };
 
   const PALETTE = ["#6ee7b7", "#60a5fa", "#f0abfc", "#fbbf24", "#a78bfa", "#34d399"];
   // GitHub Octocat mark (16x16 viewBox) as a reusable canvas path.
   const OCTO = new Path2D("M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z");
 
   let balls = [], shots = [], parts = [], TARGET = 20, last = 0;
-  const octo = { x: 0, y: 0, tx: 0, ty: 0, size: 0, fireAt: 0 };
+  const octo = { x: 0, y: 0, size: 0, fireAt: 0, waypointX: 0, waypointY: 0, bob: 0 };
+  const FOCAL = 1.6;
+  const Z_MIN = -0.8;
+  const Z_MAX = 0.8;
+  const WAYPOINT_MARGIN = 0.12;
 
   const rand = (a, b) => a + Math.random() * (b - a);
   const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 
+  function randomWaypoint() {
+    const mx = w * WAYPOINT_MARGIN;
+    const my = h * WAYPOINT_MARGIN;
+    octo.waypointX = rand(mx, Math.max(mx + 1, w - mx));
+    octo.waypointY = rand(my, Math.max(my + 1, h - my));
+  }
+
+  function ballScale(b) {
+    return Math.max(0.45, Math.min(2.4, FOCAL / Math.max(0.35, FOCAL + b.z)));
+  }
+
   function spawnBall() {
     const m = 40 * dpr;
+    const side = (Math.random() * 4) | 0;
+    let x, y, vx, vy;
+    switch (side) {
+      case 0:
+        x = rand(m, w - m); y = m; vx = rand(-0.18, 0.18) * dpr; vy = rand(0.14, 0.38) * dpr;
+        break;
+      case 1:
+        x = w - m; y = rand(m, h - m); vx = rand(-0.38, -0.14) * dpr; vy = rand(-0.18, 0.18) * dpr;
+        break;
+      case 2:
+        x = rand(m, w - m); y = h - m; vx = rand(-0.18, 0.18) * dpr; vy = rand(-0.38, -0.14) * dpr;
+        break;
+      default:
+        x = m; y = rand(m, h - m); vx = rand(0.14, 0.38) * dpr; vy = rand(-0.18, 0.18) * dpr;
+        break;
+    }
     balls.push({
-      x: rand(m, w - m), y: rand(m, h - m),
-      vx: rand(-0.3, 0.3) * dpr, vy: rand(-0.3, 0.3) * dpr,
-      r: rand(3.2, 6.5) * dpr, color: pick(PALETTE), born: performance.now(),
+      x, y, vx, vy,
+      r: rand(3.2, 6.5) * dpr,
+      color: pick(PALETTE),
+      born: performance.now(),
+      z: rand(Z_MIN, Z_MAX),
+      zVel: rand(-0.03, 0.03),
     });
   }
 
@@ -187,7 +220,8 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
     canvas.style.width = innerWidth + "px";
     canvas.style.height = innerHeight + "px";
     octo.size = Math.max(34, Math.min(66, innerWidth / 17)) * dpr;
-    octo.x = octo.tx = w * 0.72; octo.y = octo.ty = h * 0.42;
+    octo.x = w * 0.72; octo.y = h * 0.42; octo.bob = 0;
+    randomWaypoint();
     TARGET = Math.max(10, Math.min(26, Math.floor((innerWidth * innerHeight) / 52000)));
     balls = []; shots = []; parts = [];
     for (let i = 0; i < TARGET; i++) spawnBall();
@@ -196,7 +230,8 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
   function fireAt(b) {
     if (!b || b.dead) return;
     b.targeted = true;
-    shots.push({ x: octo.x, y: octo.y - octo.size * 0.12, target: b, color: b.color, speed: 9 * dpr });
+    const oy = octo.y + octo.bob;
+    shots.push({ x: octo.x, y: oy - octo.size * 0.12, target: b, color: b.color, speed: 9 * dpr });
   }
 
   function explode(b) {
@@ -206,54 +241,79 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
       const sp = rand(1, 4.2) * dpr;
       parts.push({ x: b.x, y: b.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: rand(1, 2.6) * dpr, color: b.color, life: 1 });
     }
-    parts.push({ x: b.x, y: b.y, ring: true, r: b.r, color: b.color, life: 1 });
+    parts.push({ x: b.x, y: b.y, ring: true, r: Math.max(0, b.drawR ?? b.r), color: b.color, life: 1 });
   }
 
   function step(now) {
     const dt = Math.min(2.5, (now - last) / 16.67) || 1; last = now;
     ctx.clearRect(0, 0, w, h);
 
-    // aim
-    if (mouse.active) { octo.tx = mouse.x; octo.ty = mouse.y; }
-    else { octo.tx = w * 0.72; octo.ty = h * 0.42 + Math.sin(now / 900) * 18 * dpr; }
-    octo.x += (octo.tx - octo.x) * 0.06 * dt;
-    octo.y += (octo.ty - octo.y) * 0.06 * dt;
+    octo.bob = Math.sin(now / 650) * 2.5 * dpr;
+    if (Math.hypot(octo.waypointX - octo.x, octo.waypointY - octo.y) < 30 * dpr) randomWaypoint();
+    octo.x += (octo.waypointX - octo.x) * 0.012 * dt;
+    octo.y += (octo.waypointY - octo.y) * 0.012 * dt;
 
     const liveCount = balls.reduce((n, b) => n + (b.dead ? 0 : 1), 0);
     if (liveCount < TARGET && Math.random() < 0.05 * dt) spawnBall();
-    if (now > octo.fireAt) { fireAt(pick(balls.filter((b) => !b.dead))); octo.fireAt = now + rand(360, 780); }
+    if (now > octo.fireAt) { fireAt(nearestBall(octo.x, octo.y)); octo.fireAt = now + rand(360, 780); }
 
     for (const b of balls) {
       if (b.dead) continue;
-      b.x += b.vx * dt; b.y += b.vy * dt;
-      if (b.x < b.r || b.x > w - b.r) b.vx *= -1;
-      if (b.y < b.r || b.y > h - b.r) b.vy *= -1;
+      const dx = octo.x - b.x, dy = octo.y - b.y, d = Math.hypot(dx, dy) || 1;
+      const accel = 0.03 * dpr;
+      b.vx += (dx / d) * accel * dt;
+      b.vy += (dy / d) * accel * dt;
+      b.vx *= Math.pow(0.987, dt);
+      b.vy *= Math.pow(0.987, dt);
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      if (b.x < b.r) { b.x = b.r; if (b.vx < 0) b.vx *= -0.85; }
+      if (b.x > w - b.r) { b.x = w - b.r; if (b.vx > 0) b.vx *= -0.85; }
+      if (b.y < b.r) { b.y = b.r; if (b.vy < 0) b.vy *= -0.85; }
+      if (b.y > h - b.r) { b.y = h - b.r; if (b.vy > 0) b.vy *= -0.85; }
+
+      b.vx += (rand(-0.006, 0.006) * dpr) * 0.05 * dt;
+      b.vy += (rand(-0.006, 0.006) * dpr) * 0.05 * dt;
+
+      b.zVel += (-b.z) * 0.018 * dt;
+      b.zVel *= Math.pow(0.99, dt);
+      b.z += b.zVel * dt;
+      if (b.z < Z_MIN) { b.z = Z_MIN; if (b.zVel < 0) b.zVel *= -0.65; }
+      if (b.z > Z_MAX) { b.z = Z_MAX; if (b.zVel > 0) b.zVel *= -0.65; }
+      b.scale = ballScale(b);
+      b.drawR = Math.max(0, b.r * b.scale);
     }
-    balls = balls.filter((b) => !b.dead);
 
     // shots + beams
     for (const s of shots) {
       const t = s.target;
       if (!t || t.dead) { s.done = true; continue; }
       const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy) || 1;
-      if (d < s.speed * dt + t.r) { explode(t); s.done = true; }
+      const hitR = Math.max(0, t.drawR ?? t.r);
+      if (d < s.speed * dt + hitR) { explode(t); s.done = true; }
       else { s.x += (dx / d) * s.speed * dt; s.y += (dy / d) * s.speed * dt; }
-      const g = ctx.createLinearGradient(octo.x, octo.y, s.x, s.y);
+      const g = ctx.createLinearGradient(octo.x, octo.y + octo.bob, s.x, s.y);
       g.addColorStop(0, hexA(s.color, 0)); g.addColorStop(1, hexA(s.color, 0.9));
       ctx.strokeStyle = g; ctx.lineWidth = 2 * dpr;
       ctx.shadowBlur = 12 * dpr; ctx.shadowColor = s.color;
-      ctx.beginPath(); ctx.moveTo(octo.x, octo.y - octo.size * 0.12); ctx.lineTo(s.x, s.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(octo.x, octo.y + octo.bob - octo.size * 0.12); ctx.lineTo(s.x, s.y); ctx.stroke();
       ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s.x, s.y, 2.4 * dpr, 0, Math.PI * 2); ctx.fill();
       ctx.shadowBlur = 0;
     }
     shots = shots.filter((s) => !s.done);
 
+    balls = balls.filter((b) => !b.dead);
+    const visibleBalls = balls.slice().sort((a, b) => b.z - a.z);
+
     // balls
-    for (const b of balls) {
-      const grow = Math.max(0, Math.min(1, (now - b.born) / 260));
-      ctx.fillStyle = b.color; ctx.shadowBlur = 8 * dpr; ctx.shadowColor = b.color;
+    for (const b of visibleBalls) {
+      const scale = b.scale ?? ballScale(b);
+      const r = Math.max(0, b.drawR ?? b.r * scale);
+      ctx.fillStyle = b.color;
+      ctx.shadowBlur = 8 * dpr * scale;
+      ctx.shadowColor = hexA(b.color, 0.85);
       ctx.globalAlpha = b.targeted ? 1 : 0.9;
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.r * grow, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1; ctx.shadowBlur = 0;
     }
 
@@ -281,7 +341,7 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
     const s = octo.size, k = s / 16;
     const pulse = 0.5 + 0.5 * Math.sin(now / 500);
     ctx.save();
-    ctx.translate(octo.x, octo.y);
+    ctx.translate(octo.x, octo.y + octo.bob);
     ctx.beginPath(); ctx.arc(0, 0, s * 0.6 + pulse * 6 * dpr, 0, Math.PI * 2);
     ctx.fillStyle = hexA("#6ee7b7", 0.06); ctx.fill();
     const g = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
@@ -310,13 +370,17 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
   }
 
   addEventListener("resize", resize);
-  addEventListener("pointermove", (e) => { mouse.x = e.clientX * dpr; mouse.y = e.clientY * dpr; mouse.active = true; });
-  addEventListener("pointerleave", () => { mouse.active = false; });
-  addEventListener("blur", () => { mouse.active = false; });
   // click anywhere to fire on demand at the nearest ball
   addEventListener("pointerdown", (e) => { if (dpr) fireAt(nearestBall(e.clientX * dpr, e.clientY * dpr)); });
 
   resize();
-  if (reduce) { for (const b of balls) { ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); } drawOcto(performance.now()); }
-  else raf = requestAnimationFrame(step);
+  if (reduce) {
+    const visibleBalls = balls.slice().sort((a, b) => b.z - a.z);
+    for (const b of visibleBalls) {
+      const scale = ballScale(b);
+      ctx.fillStyle = b.color; ctx.shadowBlur = 8 * dpr * scale; ctx.shadowColor = hexA(b.color, 0.85);
+      ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(0, b.r * scale), 0, Math.PI * 2); ctx.fill();
+    }
+    drawOcto(performance.now());
+  } else raf = requestAnimationFrame(step);
 })();
