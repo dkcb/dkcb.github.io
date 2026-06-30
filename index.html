@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dan K — systems for AI agents</title>
+  <meta name="description" content="Dan K (dkcb) — software engineering student at Codam (42), Amsterdam. C, TypeScript and Python: low-level fundamentals to full-stack systems for AI agents." />
+  <meta property="og:title" content="Dan K — systems for AI agents" />
+  <meta property="og:description" content="Codam (42) student in Amsterdam. C · TypeScript · Python. Building governed wallets and payments for AI agents." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="bg" aria-hidden="true"></canvas>
+
+  <header class="nav">
+    <a class="brand" href="#top"><span class="brand-mark">~</span>dkcb</a>
+    <nav class="nav-links">
+      <a href="#work">work</a>
+      <a href="#stack">stack</a>
+      <a href="#contact">contact</a>
+      <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle theme (T)">◐</button>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="kicker">Codam · 42 · Amsterdam</p>
+      <h1 class="title">Dan&nbsp;K</h1>
+      <p class="lede">
+        I build <span class="type" id="typer"></span><span class="caret">▌</span>
+      </p>
+      <p class="sub">
+        Software-engineering student working from <strong>low-level C</strong> up through
+        <strong>TypeScript</strong> full-stack and <strong>Python</strong> ML — lately,
+        infrastructure that lets <strong>AI agents</strong> hold wallets and spend money under human rules.
+      </p>
+      <div class="cta">
+        <a class="btn primary" href="#work">See the work</a>
+        <a class="btn ghost" href="https://github.com/dkcb" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+      <p class="hint">Move your cursor — the graph follows. Press <kbd>T</kbd> for light/dark.</p>
+    </section>
+
+    <section id="work" class="block">
+      <h2 class="block-title"><span class="idx">01</span> Selected work</h2>
+      <p class="block-note">Honest descriptions — what each project actually is, not what it could be.</p>
+      <div class="cards" id="cards"></div>
+    </section>
+
+    <section id="stack" class="block">
+      <h2 class="block-title"><span class="idx">02</span> Stack</h2>
+      <div class="stack" id="stack-grid"></div>
+    </section>
+
+    <section id="contact" class="block contact">
+      <h2 class="block-title"><span class="idx">03</span> Reach me</h2>
+      <p class="contact-lede">Open to internships &amp; junior roles. The fastest way to judge me is to read the code.</p>
+      <div class="contact-row">
+        <a class="btn primary" href="https://github.com/dkcb" target="_blank" rel="noopener">github.com/dkcb</a>
+        <a class="btn ghost" href="mailto:rscoper@proton.me">rscoper@proton.me</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>Built by hand — no template, no page builder. <a href="https://github.com/dkcb/dkcb.github.io" target="_blank" rel="noopener">source</a>.</span>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
