@@ -191,16 +191,16 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
     let x, y, vx, vy;
     switch (side) {
       case 0:
-        x = rand(m, w - m); y = m; vx = rand(-0.18, 0.18) * dpr; vy = rand(0.14, 0.38) * dpr;
+        x = rand(m, w - m); y = m; vx = rand(-0.09, 0.09) * dpr; vy = rand(0.07, 0.19) * dpr;
         break;
       case 1:
-        x = w - m; y = rand(m, h - m); vx = rand(-0.38, -0.14) * dpr; vy = rand(-0.18, 0.18) * dpr;
+        x = w - m; y = rand(m, h - m); vx = rand(-0.19, -0.07) * dpr; vy = rand(-0.09, 0.09) * dpr;
         break;
       case 2:
-        x = rand(m, w - m); y = h - m; vx = rand(-0.18, 0.18) * dpr; vy = rand(-0.38, -0.14) * dpr;
+        x = rand(m, w - m); y = h - m; vx = rand(-0.09, 0.09) * dpr; vy = rand(-0.19, -0.07) * dpr;
         break;
       default:
-        x = m; y = rand(m, h - m); vx = rand(0.14, 0.38) * dpr; vy = rand(-0.18, 0.18) * dpr;
+        x = m; y = rand(m, h - m); vx = rand(0.07, 0.19) * dpr; vy = rand(-0.09, 0.09) * dpr;
         break;
     }
     balls.push({
@@ -231,7 +231,7 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
     if (!b || b.dead) return;
     b.targeted = true;
     const oy = octo.y + octo.bob;
-    shots.push({ x: octo.x, y: oy - octo.size * 0.12, target: b, color: b.color, speed: 9 * dpr });
+    shots.push({ x: octo.x, y: oy - octo.size * 0.12, target: b, color: b.color, speed: 5 * dpr });
   }
 
   function explode(b) {
@@ -241,7 +241,6 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
       const sp = rand(1, 4.2) * dpr;
       parts.push({ x: b.x, y: b.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: rand(1, 2.6) * dpr, color: b.color, life: 1 });
     }
-    parts.push({ x: b.x, y: b.y, ring: true, r: Math.max(0, b.drawR ?? b.r), color: b.color, life: 1 });
   }
 
   function step(now) {
@@ -250,17 +249,17 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
 
     octo.bob = Math.sin(now / 650) * 2.5 * dpr;
     if (Math.hypot(octo.waypointX - octo.x, octo.waypointY - octo.y) < 30 * dpr) randomWaypoint();
-    octo.x += (octo.waypointX - octo.x) * 0.012 * dt;
-    octo.y += (octo.waypointY - octo.y) * 0.012 * dt;
+    octo.x += (octo.waypointX - octo.x) * 0.006 * dt;
+    octo.y += (octo.waypointY - octo.y) * 0.006 * dt;
 
     const liveCount = balls.reduce((n, b) => n + (b.dead ? 0 : 1), 0);
     if (liveCount < TARGET && Math.random() < 0.05 * dt) spawnBall();
-    if (now > octo.fireAt) { fireAt(nearestBall(octo.x, octo.y)); octo.fireAt = now + rand(360, 780); }
+    if (now > octo.fireAt) { fireAt(nearestBall(octo.x, octo.y)); octo.fireAt = now + rand(950, 1700); }
 
     for (const b of balls) {
       if (b.dead) continue;
       const dx = octo.x - b.x, dy = octo.y - b.y, d = Math.hypot(dx, dy) || 1;
-      const accel = 0.03 * dpr;
+      const accel = 0.016 * dpr;
       b.vx += (dx / d) * accel * dt;
       b.vy += (dy / d) * accel * dt;
       b.vx *= Math.pow(0.987, dt);
@@ -319,17 +318,11 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
 
     // splash particles
     for (const p of parts) {
-      p.life -= 0.02 * dt;
-      if (p.ring) {
-        p.r += 2.6 * dpr * dt;
-        ctx.strokeStyle = hexA(p.color, Math.max(0, p.life) * 0.6); ctx.lineWidth = 2 * dpr;
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.stroke();
-      } else {
-        p.vx *= 0.96; p.vy = p.vy * 0.96 + 0.05 * dpr;
-        p.x += p.vx * dt; p.y += p.vy * dt;
-        ctx.fillStyle = hexA(p.color, Math.max(0, p.life));
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * Math.max(0, p.life), 0, Math.PI * 2); ctx.fill();
-      }
+      p.life -= 0.014 * dt;
+      p.vx *= 0.96; p.vy = p.vy * 0.96 + 0.05 * dpr;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      ctx.fillStyle = hexA(p.color, Math.max(0, p.life));
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * Math.max(0, p.life), 0, Math.PI * 2); ctx.fill();
     }
     parts = parts.filter((p) => p.life > 0);
 
