@@ -150,10 +150,9 @@ document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaKey && !e.ctrlKey) toggleTheme(); });
 
 /* --------------------- canvas: Octocat turret ---------------------
-   The GitHub Octocat is the hub of the agent-spend graph. It wanders the
-   viewport on its own, auto-fires laser bolts at drifting "balls"
-   (agents/wallets); a hit pops the ball in a coloured splash, and new balls
-   keep spawning so the graph never empties. Click to fire on demand. */
+   The GitHub Octocat is the hub of the distribution graph. Satellites drift
+   around it, dashed channels march toward the hub rim, and packets flow along
+   the lines in a calm banner-like loop. */
 (function octoTurret() {
   const canvas = document.getElementById("bg");
   const ctx = canvas.getContext("2d");
@@ -164,53 +163,77 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
   // GitHub Octocat mark (16x16 viewBox) as a reusable canvas path.
   const OCTO = new Path2D("M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z");
 
-  let balls = [], shots = [], parts = [], TARGET = 20, last = 0;
-  const octo = { x: 0, y: 0, size: 0, fireAt: 0, waypointX: 0, waypointY: 0, bob: 0 };
-  const FOCAL = 1.6;
-  const Z_MIN = -0.8;
-  const Z_MAX = 0.8;
-  const WAYPOINT_MARGIN = 0.12;
+  const HUB_BASE = 48;
+  const HUB_RIM = 30;
+  const SATELLITES = [
+    { dx: -140, dy: -70, ampX: 8, ampY: 6, color: "#60a5fa", r: 4, dur: 2400, phase: 0.0 },
+    { dx: 120, dy: -60, ampX: 10, ampY: 5, color: "#60a5fa", r: 4, dur: 3000, phase: 0.8 },
+    { dx: 80, dy: 80, ampX: 8, ampY: 7, color: "#f0abfc", r: 4, dur: 2700, phase: 1.5 },
+    { dx: -100, dy: 70, ampX: 7, ampY: 8, color: "#60a5fa", r: 3.5, dur: 3300, phase: 0.9 },
+    { dx: 170, dy: 20, ampX: 6, ampY: 5, color: "#6ee7b7", r: 3.5, dur: 3600, phase: 2.2 },
+  ];
+
+  const octo = { x: 0, y: 0, size: 0, bob: 0 };
+  let channels = [], parts = [], last = 0;
 
   const rand = (a, b) => a + Math.random() * (b - a);
   const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-  function randomWaypoint() {
-    const mx = w * WAYPOINT_MARGIN;
-    const my = h * WAYPOINT_MARGIN;
-    octo.waypointX = rand(mx, Math.max(mx + 1, w - mx));
-    octo.waypointY = rand(my, Math.max(my + 1, h - my));
+  function hubR() {
+    return HUB_RIM * (octo.size / HUB_BASE);
   }
 
-  function ballScale(b) {
-    return Math.max(0.45, Math.min(2.4, FOCAL / Math.max(0.35, FOCAL + b.z)));
-  }
-
-  function spawnBall() {
-    const m = 40 * dpr;
-    const side = (Math.random() * 4) | 0;
-    let x, y, vx, vy;
-    switch (side) {
-      case 0:
-        x = rand(m, w - m); y = m; vx = rand(-0.09, 0.09) * dpr; vy = rand(0.07, 0.19) * dpr;
-        break;
-      case 1:
-        x = w - m; y = rand(m, h - m); vx = rand(-0.19, -0.07) * dpr; vy = rand(-0.09, 0.09) * dpr;
-        break;
-      case 2:
-        x = rand(m, w - m); y = h - m; vx = rand(-0.09, 0.09) * dpr; vy = rand(-0.19, -0.07) * dpr;
-        break;
-      default:
-        x = m; y = rand(m, h - m); vx = rand(0.07, 0.19) * dpr; vy = rand(-0.09, 0.09) * dpr;
-        break;
+  function randomEndpoint() {
+    const mx = w * 0.12;
+    const my = h * 0.12;
+    const hubX = octo.x || w * 0.72;
+    const hubY = octo.y || h * 0.45;
+    let x = hubX, y = hubY;
+    for (let i = 0; i < 8; i++) {
+      x = rand(mx, Math.max(mx + 1, w - mx));
+      y = rand(my, Math.max(my + 1, h - my));
+      if (Math.hypot(x - hubX, y - hubY) > Math.min(w, h) * 0.16) break;
     }
-    balls.push({
-      x, y, vx, vy,
-      r: rand(3.2, 6.5) * dpr,
-      color: pick(PALETTE),
-      born: performance.now(),
-      z: rand(Z_MIN, Z_MAX),
-      zVel: rand(-0.03, 0.03),
-    });
+    return { x, y };
+  }
+
+  function scaleForZ(z) {
+    return clamp(1.6 / Math.max(0.35, 1.6 + z), 0.45, 2.4);
+  }
+
+  function trimToHub(x, y, hx, hy, rim) {
+    const dx = hx - x;
+    const dy = hy - y;
+    const d = Math.hypot(dx, dy) || 1;
+    return { x: hx - (dx / d) * rim, y: hy - (dy / d) * rim };
+  }
+
+  function addSplash(x, y, color) {
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + rand(-0.18, 0.18);
+      const sp = rand(0.7, 2.2) * dpr;
+      parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: rand(0.8, 1.6) * dpr, color, life: 1 });
+    }
+  }
+
+  function makeChannel(spec, now) {
+    const sat = { ...spec };
+    sat.baseX = 0;
+    sat.baseY = 0;
+    sat.phaseX = spec.phase * 1.7 + rand(-0.2, 0.2);
+    sat.phaseY = spec.phase * 2.1 + rand(-0.2, 0.2);
+    sat.packetPhase = spec.phase * 900 + rand(0, spec.dur);
+    sat.packetDur = spec.dur;
+    sat.packetZ0 = rand(0.15, 0.65);
+    sat.packetZ1 = rand(-0.15, 0.35);
+    sat.lastCycle = Math.floor((now + sat.packetPhase) / sat.packetDur);
+    sat.dotR = spec.r * dpr;
+    return sat;
+  }
+
+  function seedChannels(now) {
+    channels = SATELLITES.map((spec) => makeChannel(spec, now));
   }
 
   function resize() {
@@ -220,112 +243,113 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
     canvas.style.width = innerWidth + "px";
     canvas.style.height = innerHeight + "px";
     octo.size = Math.max(34, Math.min(66, innerWidth / 17)) * dpr;
-    octo.x = w * 0.72; octo.y = h * 0.42; octo.bob = 0;
-    randomWaypoint();
-    TARGET = Math.max(10, Math.min(26, Math.floor((innerWidth * innerHeight) / 52000)));
-    balls = []; shots = []; parts = [];
-    for (let i = 0; i < TARGET; i++) spawnBall();
+    octo.x = w * 0.72;
+    octo.y = h * 0.45;
+    parts = [];
+    seedChannels(performance.now());
   }
 
-  function fireAt(b) {
-    if (!b || b.dead) return;
-    b.targeted = true;
-    const oy = octo.y + octo.bob;
-    shots.push({ x: octo.x, y: oy - octo.size * 0.12, target: b, color: b.color, speed: 5 * dpr });
+  function satellitePos(ch, now) {
+    const s = octo.size / HUB_BASE;
+    const bx = octo.x + ch.dx * s;
+    const by = octo.y + ch.dy * s;
+    return {
+      x: bx + Math.sin(now / 900 + ch.phaseX) * ch.ampX * dpr * s,
+      y: by + Math.sin(now / 1100 + ch.phaseY) * ch.ampY * dpr * s,
+    };
   }
 
-  function explode(b) {
-    b.dead = true;
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2 + Math.random();
-      const sp = rand(1, 4.2) * dpr;
-      parts.push({ x: b.x, y: b.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: rand(1, 2.6) * dpr, color: b.color, life: 1 });
+  function packetPos(ch, now, sat, rim, staticMode) {
+    const t = staticMode ? 0.42 : ((now + ch.packetPhase) % ch.packetDur) / ch.packetDur;
+    const x = sat.x + (rim.x - sat.x) * t;
+    const y = sat.y + (rim.y - sat.y) * t;
+    const z = ch.packetZ0 + (ch.packetZ1 - ch.packetZ0) * t;
+    return { x, y, z, t };
+  }
+
+  function drawSatellite(ch, sat, now, staticMode) {
+    const pulse = staticMode ? 0 : 0.5 + 0.5 * Math.sin(now / 900 + ch.phaseX * 1.3);
+    ctx.fillStyle = ch.color;
+    ctx.globalAlpha = staticMode ? 0.7 : 0.55 + pulse * 0.45;
+    ctx.beginPath();
+    ctx.arc(sat.x, sat.y, ch.dotR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawChannel(ch, now, staticMode) {
+    const hubX = octo.x;
+    const hubY = octo.y + octo.bob;
+    const sat = satellitePos(ch, now);
+    const rim = trimToHub(sat.x, sat.y, hubX, hubY, hubR());
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.setLineDash([4 * dpr, 8 * dpr]);
+    ctx.lineDashOffset = staticMode ? 0 : -((now / 18) + ch.phaseX * 40);
+
+    ctx.strokeStyle = hexA("#60a5fa", 0.11);
+    ctx.shadowBlur = 10 * dpr;
+    ctx.shadowColor = "#60a5fa";
+    ctx.lineWidth = 5 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(sat.x, sat.y);
+    ctx.lineTo(rim.x, rim.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = hexA("#60a5fa", 0.32);
+    ctx.lineWidth = 1.2 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(sat.x, sat.y);
+    ctx.lineTo(rim.x, rim.y);
+    ctx.stroke();
+    ctx.restore();
+
+    drawSatellite(ch, sat, now, staticMode);
+
+    const p = packetPos(ch, now, sat, rim, staticMode);
+    const scale = scaleForZ(p.z);
+    const pr = Math.max(0, 2.6 * dpr * scale);
+    ctx.save();
+    ctx.fillStyle = ch.color;
+    ctx.shadowBlur = 12 * dpr * scale;
+    ctx.shadowColor = ch.color;
+    ctx.globalAlpha = staticMode ? 0.9 : 0.75 + 0.25 * Math.sin(Math.PI * p.t);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, pr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (!staticMode) {
+      const cycle = Math.floor((now + ch.packetPhase) / ch.packetDur);
+      if (cycle !== ch.lastCycle) {
+        ch.lastCycle = cycle;
+        addSplash(rim.x, rim.y, ch.color);
+      }
     }
   }
 
   function step(now) {
-    const dt = Math.min(2.5, (now - last) / 16.67) || 1; last = now;
+    const dt = Math.min(2.5, (now - last) / 16.67) || 1;
+    last = now;
     ctx.clearRect(0, 0, w, h);
 
-    octo.bob = Math.sin(now / 650) * 2.5 * dpr;
-    if (Math.hypot(octo.waypointX - octo.x, octo.waypointY - octo.y) < 30 * dpr) randomWaypoint();
-    octo.x += (octo.waypointX - octo.x) * 0.006 * dt;
-    octo.y += (octo.waypointY - octo.y) * 0.006 * dt;
+    octo.bob = Math.sin(now / 1100) * 1.8 * dpr;
 
-    const liveCount = balls.reduce((n, b) => n + (b.dead ? 0 : 1), 0);
-    if (liveCount < TARGET && Math.random() < 0.05 * dt) spawnBall();
-    if (now > octo.fireAt) { fireAt(nearestBall(octo.x, octo.y)); octo.fireAt = now + rand(950, 1700); }
-
-    for (const b of balls) {
-      if (b.dead) continue;
-      const dx = octo.x - b.x, dy = octo.y - b.y, d = Math.hypot(dx, dy) || 1;
-      const accel = 0.016 * dpr;
-      b.vx += (dx / d) * accel * dt;
-      b.vy += (dy / d) * accel * dt;
-      b.vx *= Math.pow(0.987, dt);
-      b.vy *= Math.pow(0.987, dt);
-      b.x += b.vx * dt;
-      b.y += b.vy * dt;
-      if (b.x < b.r) { b.x = b.r; if (b.vx < 0) b.vx *= -0.85; }
-      if (b.x > w - b.r) { b.x = w - b.r; if (b.vx > 0) b.vx *= -0.85; }
-      if (b.y < b.r) { b.y = b.r; if (b.vy < 0) b.vy *= -0.85; }
-      if (b.y > h - b.r) { b.y = h - b.r; if (b.vy > 0) b.vy *= -0.85; }
-
-      b.vx += (rand(-0.006, 0.006) * dpr) * 0.05 * dt;
-      b.vy += (rand(-0.006, 0.006) * dpr) * 0.05 * dt;
-
-      b.zVel += (-b.z) * 0.018 * dt;
-      b.zVel *= Math.pow(0.99, dt);
-      b.z += b.zVel * dt;
-      if (b.z < Z_MIN) { b.z = Z_MIN; if (b.zVel < 0) b.zVel *= -0.65; }
-      if (b.z > Z_MAX) { b.z = Z_MAX; if (b.zVel > 0) b.zVel *= -0.65; }
-      b.scale = ballScale(b);
-      b.drawR = Math.max(0, b.r * b.scale);
-    }
-
-    // shots + beams
-    for (const s of shots) {
-      const t = s.target;
-      if (!t || t.dead) { s.done = true; continue; }
-      const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy) || 1;
-      const hitR = Math.max(0, t.drawR ?? t.r);
-      if (d < s.speed * dt + hitR) { explode(t); s.done = true; }
-      else { s.x += (dx / d) * s.speed * dt; s.y += (dy / d) * s.speed * dt; }
-      const g = ctx.createLinearGradient(octo.x, octo.y + octo.bob, s.x, s.y);
-      g.addColorStop(0, hexA(s.color, 0)); g.addColorStop(1, hexA(s.color, 0.9));
-      ctx.strokeStyle = g; ctx.lineWidth = 2 * dpr;
-      ctx.shadowBlur = 12 * dpr; ctx.shadowColor = s.color;
-      ctx.beginPath(); ctx.moveTo(octo.x, octo.y + octo.bob - octo.size * 0.12); ctx.lineTo(s.x, s.y); ctx.stroke();
-      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s.x, s.y, 2.4 * dpr, 0, Math.PI * 2); ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-    shots = shots.filter((s) => !s.done);
-
-    balls = balls.filter((b) => !b.dead);
-    const visibleBalls = balls.slice().sort((a, b) => b.z - a.z);
-
-    // balls
-    for (const b of visibleBalls) {
-      const scale = b.scale ?? ballScale(b);
-      const r = Math.max(0, b.drawR ?? b.r * scale);
-      ctx.fillStyle = b.color;
-      ctx.shadowBlur = 8 * dpr * scale;
-      ctx.shadowColor = hexA(b.color, 0.85);
-      ctx.globalAlpha = b.targeted ? 1 : 0.9;
-      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
-    }
-
-    // splash particles
     for (const p of parts) {
-      p.life -= 0.014 * dt;
-      p.vx *= 0.96; p.vy = p.vy * 0.96 + 0.05 * dpr;
-      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.life -= 0.018 * dt;
+      p.vx *= 0.972;
+      p.vy *= 0.972;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
       ctx.fillStyle = hexA(p.color, Math.max(0, p.life));
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * Math.max(0, p.life), 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(0, p.r * Math.max(0, p.life)), 0, Math.PI * 2);
+      ctx.fill();
     }
     parts = parts.filter((p) => p.life > 0);
 
+    for (const ch of channels) drawChannel(ch, now, false);
     drawOcto(now);
     raf = requestAnimationFrame(step);
   }
@@ -352,28 +376,15 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
     return `rgba(${r},${g},${b},${Math.max(0, alpha).toFixed(3)})`;
   }
 
-  function nearestBall(x, y) {
-    let best = null, bd = Infinity;
-    for (const b of balls) {
-      if (b.dead) continue;
-      const d = Math.hypot(b.x - x, b.y - y);
-      if (d < bd) { bd = d; best = b; }
-    }
-    return best;
-  }
-
   addEventListener("resize", resize);
-  // click anywhere to fire on demand at the nearest ball
-  addEventListener("pointerdown", (e) => { if (dpr) fireAt(nearestBall(e.clientX * dpr, e.clientY * dpr)); });
 
   resize();
   if (reduce) {
-    const visibleBalls = balls.slice().sort((a, b) => b.z - a.z);
-    for (const b of visibleBalls) {
-      const scale = ballScale(b);
-      ctx.fillStyle = b.color; ctx.shadowBlur = 8 * dpr * scale; ctx.shadowColor = hexA(b.color, 0.85);
-      ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(0, b.r * scale), 0, Math.PI * 2); ctx.fill();
-    }
+    ctx.clearRect(0, 0, w, h);
+    octo.bob = Math.sin(performance.now() / 1100) * 1.8 * dpr;
+    for (const ch of channels) drawChannel(ch, performance.now(), true);
     drawOcto(performance.now());
-  } else raf = requestAnimationFrame(step);
+  } else {
+    raf = requestAnimationFrame(step);
+  }
 })();
