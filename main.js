@@ -149,16 +149,35 @@ function toggleTheme() {
 document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
 addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaKey && !e.ctrlKey) toggleTheme(); });
 
-/* ----------------------------- canvas graph ----------------------------- */
-(function graph() {
+/* --------------------- canvas: Octocat turret ---------------------
+   The GitHub Octocat is the hub of the agent-spend graph. It aims at the
+   cursor (idles when the cursor leaves), auto-fires laser bolts at drifting
+   "balls" (agents/wallets); a hit pops the ball in a coloured splash, and new
+   balls keep spawning so the graph never empties. Click to fire on demand. */
+(function octoTurret() {
   const canvas = document.getElementById("bg");
   const ctx = canvas.getContext("2d");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let w, h, dpr, nodes = [], raf;
+  let w, h, dpr, raf;
   const mouse = { x: -9999, y: -9999, active: false };
 
-  function accent() {
-    return getComputedStyle(root).getPropertyValue("--accent-2").trim() || "#60a5fa";
+  const PALETTE = ["#6ee7b7", "#60a5fa", "#f0abfc", "#fbbf24", "#a78bfa", "#34d399"];
+  // GitHub Octocat mark (16x16 viewBox) as a reusable canvas path.
+  const OCTO = new Path2D("M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z");
+
+  let balls = [], shots = [], parts = [], TARGET = 20, last = 0;
+  const octo = { x: 0, y: 0, tx: 0, ty: 0, size: 0, fireAt: 0 };
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+
+  function spawnBall() {
+    const m = 40 * dpr;
+    balls.push({
+      x: rand(m, w - m), y: rand(m, h - m),
+      vx: rand(-0.3, 0.3) * dpr, vy: rand(-0.3, 0.3) * dpr,
+      r: rand(3.2, 6.5) * dpr, color: pick(PALETTE), born: performance.now(),
+    });
   }
 
   function resize() {
@@ -167,93 +186,137 @@ addEventListener("keydown", (e) => { if (e.key.toLowerCase() === "t" && !e.metaK
     h = canvas.height = innerHeight * dpr;
     canvas.style.width = innerWidth + "px";
     canvas.style.height = innerHeight + "px";
-    const count = Math.min(70, Math.floor((innerWidth * innerHeight) / 22000));
-    nodes = Array.from({ length: count }, () => ({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      vx: (Math.random() - 0.5) * 0.18 * dpr,
-      vy: (Math.random() - 0.5) * 0.18 * dpr,
-      r: (Math.random() * 1.6 + 0.8) * dpr,
-      hub: Math.random() < 0.12,
-    }));
+    octo.size = Math.max(34, Math.min(66, innerWidth / 17)) * dpr;
+    octo.x = octo.tx = w * 0.72; octo.y = octo.ty = h * 0.42;
+    TARGET = Math.max(10, Math.min(26, Math.floor((innerWidth * innerHeight) / 52000)));
+    balls = []; shots = []; parts = [];
+    for (let i = 0; i < TARGET; i++) spawnBall();
   }
 
-  function step() {
+  function fireAt(b) {
+    if (!b || b.dead) return;
+    b.targeted = true;
+    shots.push({ x: octo.x, y: octo.y - octo.size * 0.12, target: b, color: b.color, speed: 9 * dpr });
+  }
+
+  function explode(b) {
+    b.dead = true;
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + Math.random();
+      const sp = rand(1, 4.2) * dpr;
+      parts.push({ x: b.x, y: b.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: rand(1, 2.6) * dpr, color: b.color, life: 1 });
+    }
+    parts.push({ x: b.x, y: b.y, ring: true, r: b.r, color: b.color, life: 1 });
+  }
+
+  function step(now) {
+    const dt = Math.min(2.5, (now - last) / 16.67) || 1; last = now;
     ctx.clearRect(0, 0, w, h);
-    const a = accent();
-    const LINK = 140 * dpr;
-    const MOUSE = 200 * dpr;
 
-    for (const n of nodes) {
-      n.x += n.vx; n.y += n.vy;
-      if (n.x < 0 || n.x > w) n.vx *= -1;
-      if (n.y < 0 || n.y > h) n.vy *= -1;
+    // aim
+    if (mouse.active) { octo.tx = mouse.x; octo.ty = mouse.y; }
+    else { octo.tx = w * 0.72; octo.ty = h * 0.42 + Math.sin(now / 900) * 18 * dpr; }
+    octo.x += (octo.tx - octo.x) * 0.06 * dt;
+    octo.y += (octo.ty - octo.y) * 0.06 * dt;
 
-      if (mouse.active) {
-        const dx = mouse.x - n.x, dy = mouse.y - n.y;
-        const d = Math.hypot(dx, dy);
-        if (d < MOUSE) {
-          const f = (1 - d / MOUSE) * 0.012;
-          n.x += dx * f; n.y += dy * f;
-        }
-      }
+    const liveCount = balls.reduce((n, b) => n + (b.dead ? 0 : 1), 0);
+    if (liveCount < TARGET && Math.random() < 0.05 * dt) spawnBall();
+    if (now > octo.fireAt) { fireAt(pick(balls.filter((b) => !b.dead))); octo.fireAt = now + rand(360, 780); }
+
+    for (const b of balls) {
+      if (b.dead) continue;
+      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.x < b.r || b.x > w - b.r) b.vx *= -1;
+      if (b.y < b.r || b.y > h - b.r) b.vy *= -1;
+    }
+    balls = balls.filter((b) => !b.dead);
+
+    // shots + beams
+    for (const s of shots) {
+      const t = s.target;
+      if (!t || t.dead) { s.done = true; continue; }
+      const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy) || 1;
+      if (d < s.speed * dt + t.r) { explode(t); s.done = true; }
+      else { s.x += (dx / d) * s.speed * dt; s.y += (dy / d) * s.speed * dt; }
+      const g = ctx.createLinearGradient(octo.x, octo.y, s.x, s.y);
+      g.addColorStop(0, hexA(s.color, 0)); g.addColorStop(1, hexA(s.color, 0.9));
+      ctx.strokeStyle = g; ctx.lineWidth = 2 * dpr;
+      ctx.shadowBlur = 12 * dpr; ctx.shadowColor = s.color;
+      ctx.beginPath(); ctx.moveTo(octo.x, octo.y - octo.size * 0.12); ctx.lineTo(s.x, s.y); ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s.x, s.y, 2.4 * dpr, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    shots = shots.filter((s) => !s.done);
+
+    // balls
+    for (const b of balls) {
+      const grow = Math.max(0, Math.min(1, (now - b.born) / 260));
+      ctx.fillStyle = b.color; ctx.shadowBlur = 8 * dpr; ctx.shadowColor = b.color;
+      ctx.globalAlpha = b.targeted ? 1 : 0.9;
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r * grow, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
     }
 
-    // edges
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a1 = nodes[i], a2 = nodes[j];
-        const dx = a1.x - a2.x, dy = a1.y - a2.y;
-        const d = Math.hypot(dx, dy);
-        if (d < LINK) {
-          const o = (1 - d / LINK) * 0.5;
-          ctx.strokeStyle = hexA(a, o * 0.5);
-          ctx.lineWidth = dpr * 0.6;
-          ctx.beginPath();
-          ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y); ctx.stroke();
-        }
-      }
-      // link to cursor
-      if (mouse.active) {
-        const dx = nodes[i].x - mouse.x, dy = nodes[i].y - mouse.y;
-        const d = Math.hypot(dx, dy);
-        if (d < MOUSE) {
-          ctx.strokeStyle = hexA(a, (1 - d / MOUSE) * 0.6);
-          ctx.lineWidth = dpr * 0.7;
-          ctx.beginPath();
-          ctx.moveTo(nodes[i].x, nodes[i].y); ctx.lineTo(mouse.x, mouse.y); ctx.stroke();
-        }
+    // splash particles
+    for (const p of parts) {
+      p.life -= 0.02 * dt;
+      if (p.ring) {
+        p.r += 2.6 * dpr * dt;
+        ctx.strokeStyle = hexA(p.color, Math.max(0, p.life) * 0.6); ctx.lineWidth = 2 * dpr;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.stroke();
+      } else {
+        p.vx *= 0.96; p.vy = p.vy * 0.96 + 0.05 * dpr;
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        ctx.fillStyle = hexA(p.color, Math.max(0, p.life));
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * Math.max(0, p.life), 0, Math.PI * 2); ctx.fill();
       }
     }
+    parts = parts.filter((p) => p.life > 0);
 
-    // nodes
-    for (const n of nodes) {
-      ctx.fillStyle = n.hub ? a : hexA(a, 0.7);
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, n.hub ? n.r * 1.8 : n.r, 0, Math.PI * 2);
-      ctx.fill();
-      if (n.hub) {
-        ctx.strokeStyle = hexA(a, 0.25);
-        ctx.lineWidth = dpr;
-        ctx.beginPath(); ctx.arc(n.x, n.y, n.r * 4, 0, Math.PI * 2); ctx.stroke();
-      }
-    }
+    drawOcto(now);
     raf = requestAnimationFrame(step);
+  }
+
+  function drawOcto(now) {
+    const s = octo.size, k = s / 16;
+    const pulse = 0.5 + 0.5 * Math.sin(now / 500);
+    ctx.save();
+    ctx.translate(octo.x, octo.y);
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.6 + pulse * 6 * dpr, 0, Math.PI * 2);
+    ctx.fillStyle = hexA("#6ee7b7", 0.06); ctx.fill();
+    const g = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2);
+    g.addColorStop(0, "#6ee7b7"); g.addColorStop(0.5, "#60a5fa"); g.addColorStop(1, "#f0abfc");
+    ctx.fillStyle = g; ctx.shadowBlur = 16 * dpr; ctx.shadowColor = "#60a5fa";
+    ctx.translate(-s / 2, -s / 2); ctx.scale(k, k);
+    ctx.fill(OCTO);
+    ctx.restore();
   }
 
   function hexA(hex, alpha) {
     hex = hex.replace("#", "");
     if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
     const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
-    return `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+    return `rgba(${r},${g},${b},${Math.max(0, alpha).toFixed(3)})`;
+  }
+
+  function nearestBall(x, y) {
+    let best = null, bd = Infinity;
+    for (const b of balls) {
+      if (b.dead) continue;
+      const d = Math.hypot(b.x - x, b.y - y);
+      if (d < bd) { bd = d; best = b; }
+    }
+    return best;
   }
 
   addEventListener("resize", resize);
   addEventListener("pointermove", (e) => { mouse.x = e.clientX * dpr; mouse.y = e.clientY * dpr; mouse.active = true; });
   addEventListener("pointerleave", () => { mouse.active = false; });
   addEventListener("blur", () => { mouse.active = false; });
+  // click anywhere to fire on demand at the nearest ball
+  addEventListener("pointerdown", (e) => { if (dpr) fireAt(nearestBall(e.clientX * dpr, e.clientY * dpr)); });
 
   resize();
-  if (reduce) { step(); cancelAnimationFrame(raf); ctx.globalAlpha = 1; }
-  else step();
+  if (reduce) { for (const b of balls) { ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); } drawOcto(performance.now()); }
+  else raf = requestAnimationFrame(step);
 })();
