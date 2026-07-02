@@ -10,9 +10,9 @@ const PROJECTS = [
     name: "FLUX",
     tag: "agentic commerce",
     accent: "#6ee7b7",
-    desc: "A gateway that lets AI agents hold wallets and make payments under human-set rules: a KYA policy engine, an append-only ledger, and a React operator dashboard.",
-    chips: ["TypeScript", "Express", "React", "PostgreSQL", "Drizzle"],
-    honest: "~6k-LOC backend; the dashboard ships with a mock backend so it's demoable with no server.",
+    desc: "A gateway that lets AI agents hold wallets and make payments under human-set rules — built by a team in a 3-day megathon. My part: the React operator dashboard.",
+    chips: ["React", "TypeScript", "Vite"],
+    honest: "Front-end (~12k LOC) is mine; backend by teammates. Ships with a mock backend so it's demoable with no server.",
     href: "https://github.com/dkcb/flux",
   },
   {
@@ -21,7 +21,7 @@ const PROJECTS = [
     accent: "#60a5fa",
     desc: "Full single-page app where users play live multiplayer Pong and chat. 2FA auth, friends, match history, achievements.",
     chips: ["TypeScript", "NestJS", "React", "WebSockets"],
-    honest: "42 group project — built with a team of five.",
+    honest: "42 group project.",
     href: "https://github.com/dkcb/ft_transcendence",
   },
   {
@@ -55,7 +55,7 @@ const PROJECTS = [
     name: "C++ modules",
     tag: "OOP fundamentals",
     accent: "#a78bfa",
-    desc: "The 42 C++ piscine (CPP00–09): classes, polymorphism, operator overloading, exceptions, casts, templates and the STL.",
+    desc: "The 42 C++ modules (CPP00–06, 08–09): classes, polymorphism, operator overloading, exceptions, casts and the STL.",
     chips: ["C++98", "OOP"],
     honest: "Curriculum coursework, C++98 norm.",
     href: "https://github.com/dkcb/C-",
@@ -64,16 +64,15 @@ const PROJECTS = [
 
 const STACK = [
   ["Languages", "C · C++ · TypeScript · Python"],
-  ["Web", "React · Node · Express · NestJS · Vite"],
-  ["Data", "PostgreSQL · Drizzle · NumPy"],
-  ["ML", "linear models · neural nets (from scratch)"],
+  ["Web", "React · Vite · TypeScript (+ Node/NestJS via team projects)"],
+  ["Data", "Python · matplotlib · a model written from scratch"],
   ["Tooling", "Git · Linux · Jest · Docker"],
 ];
 
 const TYPE_LINES = [
-  "systems for AI agents.",
+  "front-ends for AI-agent platforms.",
   "shells, in C.",
-  "full-stack TypeScript.",
+  "web apps in TypeScript.",
   "ML from scratch.",
 ];
 
